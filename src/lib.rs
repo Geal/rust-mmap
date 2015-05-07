@@ -228,6 +228,8 @@ impl MemoryMap {
         }
         if fd == -1 && !custom_flags { flags |= libc::MAP_ANON; }
 
+        flags |= libc::MAP_SHARED;
+
         let r = unsafe {
             libc::mmap(addr as *mut c_void, len as libc::size_t, prot, flags,
                        fd, offset)
@@ -258,6 +260,26 @@ impl MemoryMap {
     /// `MapAddr` respectively.
     pub fn granularity() -> usize {
         page_size()
+    }
+
+    pub fn msync(&mut self) -> Result<(), MapError> {
+      let flags = libc::MS_SYNC | libc::MS_INVALIDATE;
+      let r = unsafe {
+        libc::msync(self.data as *mut c_void, self.len as libc::size_t, flags)
+      };
+      println!("msync apparently done");
+      if r != 0 {
+        Err(match errno() {
+          libc::EACCES => ErrFdNotAvail,
+          libc::EBADF => ErrInvalidFd,
+          libc::EINVAL => ErrUnaligned,
+          libc::ENODEV => ErrNoMapSupport,
+          libc::ENOMEM => ErrNoMem,
+          code => ErrUnknown(code as isize)
+        })
+      } else {
+        Ok(())
+      }
     }
 }
 
